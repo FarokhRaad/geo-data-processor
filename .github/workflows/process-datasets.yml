@@ -1,59 +1,56 @@
-name: Process GeoSite and GeoIP Datasets
+name: Process GeoIP Datasets (IPv4 Only)
 
 on:
   schedule:
-    - cron: "0 0 * * *" # Run daily at midnight
-  workflow_dispatch: # Allow manual triggering of the workflow
+    - cron: "0 0 * * *"  # Runs daily at midnight
+  workflow_dispatch:      # Allows manual triggering from GitHub UI
 
 jobs:
   process-datasets:
     runs-on: ubuntu-latest
 
     steps:
-    # Step 1: Checkout Repository
-    - name: Checkout Repository
-      uses: actions/checkout@v3
+      # Step 1: Checkout Repository
+      - name: Checkout Repository
+        uses: actions/checkout@v3
 
-    # Step 2: Download GeoSite and GeoIP Data
-    - name: Download GeoSite Data
-      run: |
-        mkdir -p datasets
-        curl -L -o datasets/geosite.txt https://github.com/bootmortis/iran-hosted-domains/releases/download/202501060036/domains.txt
-        echo "Downloaded GeoSite data."
+      # Step 2: Download GeoIP Data (only)
+      - name: Download GeoIP Data
+        run: |
+          mkdir -p datasets
+          curl -L -o datasets/geoip.txt \
+            https://raw.githubusercontent.com/Chocolate4U/Iran-clash-rules/release/ircidr.txt
+          echo "Downloaded GeoIP data."
 
-    - name: Download GeoIP Data
-      run: |
-        curl -L -o datasets/geoip.txt https://raw.githubusercontent.com/Chocolate4U/Iran-clash-rules/release/ircidr.txt
-        echo "Downloaded GeoIP data."
+      # Step 3: Process GeoIP Data (IPv4 only)
+      - name: Format GeoIP Data (IPv4 only)
+        run: |
+          mkdir -p output
+          # Extract only IPv4 lines (CIDRs) from geoip.txt
+          grep -E '^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+/' datasets/geoip.txt \
+            > output/iran-ipv4.txt
+          echo "Formatted GeoIP data (IPv4 only) to output/iran-ipv4.txt"
 
-    # Step 3: Process GeoSite Data
-    - name: Format GeoSite Data
-      run: |
-        mkdir -p output
-        cat datasets/geosite.txt | while read domain; do
-          if [[ $domain != \#* ]]; then
-            echo "server=/$domain/127.0.0.1#5353" >> output/iran-domains.conf
-          fi
-        done
-        echo "Formatted GeoSite data to output/iran-domains.conf"
+      # Step 4: Commit and Push Processed Files
+      - name: Commit and Push Processed Files
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          # Configure Git
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+          
+          # Create/update the "processed-data" branch
+          git checkout -B processed-data
 
-    # Step 4: Process GeoIP Data
-    - name: Format GeoIP Data
-      run: |
-        mkdir -p output
-        grep -E '^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+/' datasets/geoip.txt > output/iran-ipv4.txt
-        grep -E '^([0-9a-fA-F]{1,4}:)+[0-9a-fA-F]{1,4}' datasets/geoip.txt > output/iran-ipv6.txt
-        echo "Formatted GeoIP data to output/iran-ipv4.txt and output/iran-ipv6.txt"
+          # Move generated file from output/ into the repo root
+          mv output/iran-ipv4.txt iran-ipv4.txt
+          
+          # Stage changes
+          git add iran-ipv4.txt
 
-    # Step 5: Commit and Push Processed Files
-    - name: Commit and Push Processed Files
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      run: |
-        git config --global user.name "github-actions[bot]"
-        git config --global user.email "github-actions[bot]@users.noreply.github.com"
-        git checkout -B processed-data
-        mv output/* .
-        git add iran-domains.conf iran-ipv4.txt iran-ipv6.txt
-        git commit -m "Update processed datasets" || echo "No changes to commit"
-        git push -f origin processed-data
+          # Commit only if there's a diff
+          git diff --cached --quiet || git commit -m "Update processed IPv4 CIDRs"
+          
+          # Push (force in case the branch doesn’t exist yet)
+          git push -f origin processed-data
