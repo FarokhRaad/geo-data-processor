@@ -47,11 +47,13 @@ jobs:
 
     # Step 5: Commit and Push Processed Files
     - name: Commit and Push Processed Files
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       run: |
         git config --global user.name "github-actions[bot]"
         git config --global user.email "github-actions[bot]@users.noreply.github.com"
         git checkout -B processed-data
         mv output/* .
         git add iran-domains.conf iran-ipv4.txt iran-ipv6.txt
-        git commit -m "Update processed datasets"
+        git commit -m "Update processed datasets" || echo "No changes to commit"
         git push -f origin processed-data
