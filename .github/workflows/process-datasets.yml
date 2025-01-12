@@ -43,7 +43,7 @@ jobs:
 
     # Step 5: Upload Outputs
     - name: Upload Processed Files
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4
       with:
         name: formatted-datasets
         path: output/
