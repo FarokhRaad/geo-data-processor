@@ -1,0 +1,49 @@
+name: Process GeoSite and GeoIP Datasets
+
+on:
+  schedule:
+    - cron: "0 0 * * *" # Run daily at midnight
+  workflow_dispatch: # Allow manual triggering of the workflow
+
+jobs:
+  process-datasets:
+    runs-on: ubuntu-latest
+
+    steps:
+    # Step 1: Check out the repository
+    - name: Checkout Repository
+      uses: actions/checkout@v3
+
+    # Step 2: Fetch GeoSite and GeoIP Data
+    - name: Download GeoSite Data
+      run: |
+        mkdir -p datasets
+        curl -L -o datasets/geosite.txt https://github.com/bootmortis/iran-hosted-domains/releases/download/202501060036/domains.txt
+        echo "Downloaded GeoSite data."
+
+    - name: Download GeoIP Data
+      run: |
+        curl -L -o datasets/geoip.txt https://raw.githubusercontent.com/Chocolate4U/Iran-clash-rules/release/ircidr.txt
+        echo "Downloaded GeoIP data."
+
+    # Step 3: Format GeoSite Data
+    - name: Format GeoSite Data
+      run: |
+        mkdir -p output
+        cat datasets/geosite.txt | while read domain; do
+          echo "server=/$domain/127.0.0.1#5353" >> output/iran-domains.conf
+        done
+        echo "Formatted GeoSite data to output/iran-domains.conf"
+
+    # Step 4: Format GeoIP Data
+    - name: Format GeoIP Data
+      run: |
+        awk '{print $1}' datasets/geoip.txt > output/iran-ip.txt
+        echo "Formatted GeoIP data to output/iran-ip.txt"
+
+    # Step 5: Upload Outputs
+    - name: Upload Processed Files
+      uses: actions/upload-artifact@v3
+      with:
+        name: formatted-datasets
+        path: output/
